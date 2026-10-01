@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Happy Birthday! ✨</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      user-select: none;
+      transition: background 0.6s ease;
+    }
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      cursor: pointer;
+    }
+    .overlay {
+      position: fixed;
+      z-index: 10;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 16px 32px;
+    }
+    .nav-pills {
+      pointer-events: auto;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 6px;
+      border-radius: 999px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    }
+    .nav-btn {
+      border: none;
+      background: transparent;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #475569;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .nav-btn.active {
+      background: #ff4d6d;
+      color: #ffffff;
+      box-shadow: 0 4px 12px rgba(255, 77, 109, 0.35);
+    }
+    .card {
+      pointer-events: auto;
+      max-width: 520px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(16px);
+      border-radius: 24px;
+      padding: 24px 28px;
+      text-align: center;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+    }
+    .card.dark {
+      background: rgba(15, 23, 42, 0.78);
+      color: #f8fafc;
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: #ffe5ec;
+      color: #c9184a;
+      margin-bottom: 10px;
+    }
+    .card h1 {
+      font-size: 26px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    .card p {
+      font-size: 15px;
+      line-height: 1.6;
+      opacity: 0.9;
+      margin-bottom: 14px;
+    }
+    .action-btn {
+      border: none;
+      background: linear-gradient(135deg, #ff4d6d, #ff8fa3);
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 11px 22px;
+      border-radius: 999px;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(255, 77, 109, 0.35);
+      transition: transform 0.15s;
+    }
+    .action-btn:active { transform: scale(0.96); }
+  </style>
+</head>
+<body>
+  <canvas id="stageCanvas"></canvas>
+
+  <div class="overlay">
+    <div class="nav-pills">
+      <button class="nav-btn" onclick="setStage(1)">1. ☀️ Sunrise Balloons</button>
+      <button class="nav-btn" onclick="setStage(2)">2. 💌 Floating Hearts</button>
+      <button class="nav-btn" onclick="setStage(3)">3. 🎂 Birthday Wish</button>
+      <button class="nav-btn" onclick="setStage(4)">4. 🎆 Starry Fireworks</button>
+    </div>
+
+    <div id="infoCard" class="card">
+      <span id="stageBadge" class="badge">Part 1 of 4 • Morning</span>
+      <h1 id="stageTitle">Rise & Shine, Birthday Girl! 🎈</h1>
+      <p id="stageDesc">Tap or click any balloon to pop it into birthday confetti!</p>
+      <button id="stageAction" class="action-btn" onclick="triggerSpecial()">✨ Release More Balloons</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('stageCanvas');
+    const ctx = canvas.getContext('2d');
+    let W = window.innerWidth, H = window.innerHeight;
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const params = new URLSearchParams(window.location.search);
+    let currentStage = parseInt(params.get('stage') || '1', 10);
+    if (![1, 2, 3, 4].includes(currentStage)) currentStage = 1;
+
+    let balloons = [];
+    let hearts = [];
+    let particles = [];
+    let candlesLit = [true, true, true];
+    let stars = Array.from({ length: 90 }, () => ({
+      x: Math.random() * 2000,
+      y: Math.random() * 1200,
+      r: Math.random() * 2 + 0.8,
+      phase: Math.random() * Math.PI * 2
+    }));
+
+    const STAGE_META = {
+      1: {
+        badge: 'Part 1 of 4 • Morning Surprise',
+        title: 'Rise & Shine, Birthday Girl! 🎈',
+        desc: 'Tap or click on the floating balloons to pop them into sparkles, or release a new bunch!',
+        btn: '🎈 Release More Balloons',
+        dark: false
+      },
+      2: {
+        badge: 'Part 2 of 4 • Afternoon Note',
+        title: 'Sending You a Million Smiles 💕',
+        desc: 'Click or drag anywhere on the screen to shower the sky with floating hearts!',
+        btn: '💖 Send a Heart Burst',
+        dark: false
+      },
+      3: {
+        badge: 'Part 3 of 4 • Evening Celebration',
+        title: 'Close Your Eyes & Make a Wish! 🎂',
+        desc: 'Click on the flickering candles (or the button below) to blow them out and celebrate!',
+        btn: '🕯️ Blow Out the Candles!',
+        dark: true
+      },
+      4: {
+        badge: 'Part 4 of 4 • Midnight Finale',
+        title: 'A Sky Full of Fireworks for You 🎆',
+        desc: 'Tap anywhere in the night sky to launch a custom birthday firework burst!',
+        btn: '🎆 Grand Finale Burst!',
+        dark: true
+      }
+    };
+
+    function spawnBalloon(yOverride) {
+      const colors = ['#ff4d6d', '#ff8fa3', '#ffb703', '#c77dff', '#4cc9f0', '#06d6a0'];
+      balloons.push({
+        x: Math.random() * (W - 120) + 60,
+        y: yOverride !== undefined ? yOverride : H + 60 + Math.random() * 120,
+        r: 28 + Math.random() * 14,
+        vy: 1.3 + Math.random() * 1.4,
+        phase: Math.random() * Math.PI * 2,
+        color: colors[Math.floor(Math.random() * colors.length)]
+      });
+    }
+
+    function spawnHeart(x, y, vx, vy) {
+      const colors = ['#ff4d6d', '#ff758f', '#c9184a', '#e05780', '#ff9ebb'];
+      hearts.push({
+        x: x !== undefined ? x : Math.random() * W,
+        y: y !== undefined ? y : H + 30,
+        vx: vx !== undefined ? vx : (Math.random() - 0.5) * 1.5,
+        vy: vy !== undefined ? vy : -(1.5 + Math.random() * 2.2),
+        size: 14 + Math.random() * 18,
+        alpha: 1,
+        color: colors[Math.floor(Math.random() * colors.length)]
+      });
+    }
+
+    function spawnBurst(x, y, count = 36) {
+      const colors = ['#ff4d6d', '#ffbe0b', '#06d6a0', '#4cc9f0', '#c77dff', '#ffffff', '#ff9ebb'];
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.2;
+        const speed = 2 + Math.random() * 6.5;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          r: 2.5 + Math.random() * 3,
+          alpha: 1,
+          color: colors[Math.floor(Math.random() * colors.length)]
+        });
+      }
+    }
+
+    function setStage(s) {
+      currentStage = s;
+      const meta = STAGE_META[s];
+      document.getElementById('stageBadge').textContent = meta.badge;
+      document.getElementById('stageTitle').textContent = meta.title;
+      document.getElementById('stageDesc').textContent = meta.desc;
+      document.getElementById('stageAction').textContent = meta.btn;
+      document.getElementById('infoCard').classList.toggle('dark', meta.dark);
+      document.querySelectorAll('.nav-btn').forEach((btn, idx) => {
+        btn.classList.toggle('active', idx + 1 === s);
+      });
+      balloons = [];
+      hearts = [];
+      particles = [];
+      candlesLit = [true, true, true];
+      if (s === 1) {
+        for (let i = 0; i < 12; i++) spawnBalloon(Math.random() * H);
+      } else if (s === 2) {
+        for (let i = 0; i < 18; i++) spawnHeart(Math.random() * W, Math.random() * H);
+      } else if (s === 4) {
+        spawnBurst(W * 0.3, H * 0.3, 45);
+        spawnBurst(W * 0.7, H * 0.28, 45);
+      }
+    }
+
+    function triggerSpecial() {
+      if (currentStage === 1) {
+        for (let i = 0; i < 6; i++) spawnBalloon();
+      } else if (currentStage === 2) {
+        for (let i = 0; i < 20; i++) {
+          spawnHeart(W / 2, H / 2, (Math.random() - 0.5) * 8, -2 - Math.random() * 6);
+        }
+      } else if (currentStage === 3) {
+        if (candlesLit.some(Boolean)) {
+          candlesLit = [false, false, false];
+          spawnBurst(W / 2, H / 2 - 120, 65);
+          document.getElementById('stageTitle').textContent = '🎉 Wish Made! Happy Birthday! 🎉';
+          document.getElementById('stageAction').textContent = '🕯️ Relight Candles';
+        } else {
+          candlesLit = [true, true, true];
+          document.getElementById('stageTitle').textContent = STAGE_META[3].title;
+          document.getElementById('stageAction').textContent = STAGE_META[3].btn;
+        }
+      } else if (currentStage === 4) {
+        for (let i = 0; i < 4; i++) {
+          setTimeout(() => {
+            spawnBurst(W * (0.2 + Math.random() * 0.6), H * (0.15 + Math.random() * 0.4), 52);
+          }, i * 220);
+        }
+      }
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      if (currentStage === 1) {
+        for (let i = balloons.length - 1; i >= 0; i--) {
+          const b = balloons[i];
+          if (Math.hypot(mx - b.x, my - b.y) <= b.r * 1.2) {
+            spawnBurst(b.x, b.y, 28);
+            balloons.splice(i, 1);
+            spawnBalloon();
+            return;
+          }
+        }
+        spawnBalloon(my);
+      } else if (currentStage === 2) {
+        for (let i = 0; i < 8; i++) {
+          spawnHeart(mx, my, (Math.random() - 0.5) * 5, -1.5 - Math.random() * 4);
+        }
+      } else if (currentStage === 3) {
+        triggerSpecial();
+      } else if (currentStage === 4) {
+        spawnBurst(mx, my, 48);
+      }
+    });
+
+    function drawHeartShape(cx, cy, size, color, alpha = 1) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      const s = size / 16;
+      for (let deg = 0; deg < 360; deg += 8) {
+        const rad = (deg * Math.PI) / 180;
+        const x = 16 * Math.pow(Math.sin(rad), 3);
+        const y = -(13 * Math.cos(rad) - 5 * Math.cos(2 * rad) - 2 * Math.cos(3 * rad) - Math.cos(4 * rad));
+        if (deg === 0) ctx.moveTo(cx + x * s, cy + y * s);
+        else ctx.lineTo(cx + x * s, cy + y * s);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    let tick = 0;
+    function animate() {
+      tick += 0.03;
+      ctx.clearRect(0, 0, W, H);
+
+      if (currentStage === 1) {
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, '#fde2e4');
+        grad.addColorStop(0.6, '#fff1e6');
+        grad.addColorStop(1, '#fde4cf');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        // Glowing morning sun
+        const sunY = H * 0.45 + Math.sin(tick) * 10;
+        const sunGrad = ctx.createRadialGradient(W / 2, sunY, 10, W / 2, sunY, 180);
+        sunGrad.addColorStop(0, 'rgba(255, 190, 11, 0.65)');
+        sunGrad.addColorStop(1, 'rgba(255, 190, 11, 0)');
+        ctx.fillStyle = sunGrad;
+        ctx.beginPath();
+        ctx.arc(W / 2, sunY, 180, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (balloons.length < 10) spawnBalloon();
+        balloons.forEach((b) => {
+          b.y -= b.vy;
+          b.x += Math.sin(tick + b.phase) * 0.8;
+          if (b.y < -80) b.y = H + 70;
+
+          // String
+          ctx.strokeStyle = 'rgba(140, 100, 110, 0.55)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(b.x, b.y + b.r);
+          ctx.quadraticCurveTo(b.x + Math.sin(tick * 2 + b.phase) * 10, b.y + b.r + 30, b.x, b.y + b.r + 60);
+          ctx.stroke();
+
+          // Balloon
+          ctx.fillStyle = b.color;
+          ctx.beginPath();
+          ctx.ellipse(b.x, b.y, b.r, b.r * 1.15, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Highlight
+          ctx.fillStyle = 'rgba(255,255,255,0.45)';
+          ctx.beginPath();
+          ctx.ellipse(b.x - b.r * 0.35, b.y - b.r * 0.35, b.r * 0.22, b.r * 0.35, -0.4, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      } else if (currentStage === 2) {
+        const grad = ctx.createLinearGradient(0, 0, W, H);
+        grad.addColorStop(0, '#fff0f3');
+        grad.addColorStop(1, '#ffccd5');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        if (Math.random() < 0.25) spawnHeart();
+        for (let i = hearts.length - 1; i >= 0; i--) {
+          const h = hearts[i];
+          h.x += h.vx + Math.sin(tick + i) * 0.5;
+          h.y += h.vy;
+          if (h.y < -40) hearts.splice(i, 1);
+          else drawHeartShape(h.x, h.y, h.size, h.color, h.alpha);
+        }
+      } else if (currentStage === 3) {
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, '#1e1136');
+        grad.addColorStop(1, '#3c1e5e');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        const cx = W / 2;
+        const baseY = H * 0.56;
+
+        // Plate
+        ctx.fillStyle = '#e2e8f0';
+        ctx.beginPath();
+        ctx.ellipse(cx, baseY + 6, 140, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Bottom tier
+        ctx.fillStyle = '#ffafcc';
+        ctx.beginPath();
+        ctx.roundRect(cx - 105, baseY - 84, 210, 84, 14);
+        ctx.fill();
+
+        // Top tier
+        ctx.fillStyle = '#fde68a';
+        ctx.beginPath();
+        ctx.roundRect(cx - 75, baseY - 148, 150, 66, 12);
+        ctx.fill();
+
+        // Candles
+        [-40, 0, 40].forEach((offset, idx) => {
+          const kx = cx + offset;
+          const ky = baseY - 192;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(kx - 7, ky, 14, 44);
+          ctx.fillStyle = '#ff4d6d';
+          ctx.fillRect(kx - 7, ky + 12, 14, 6);
+          ctx.fillRect(kx - 7, ky + 28, 14, 6);
+
+          if (candlesLit[idx]) {
+            const fx = kx + Math.sin(tick * 3 + idx) * 2.5;
+            const fy = ky - 14 + Math.cos(tick * 4 + idx) * 2;
+            const glow = ctx.createRadialGradient(fx, fy, 2, fx, fy, 38);
+            glow.addColorStop(0, 'rgba(255, 190, 11, 0.65)');
+            glow.addColorStop(1, 'rgba(255, 190, 11, 0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(fx, fy, 38, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#fb923c';
+            ctx.beginPath();
+            ctx.ellipse(fx, fy, 8, 14, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#fef08a';
+            ctx.beginPath();
+            ctx.ellipse(fx, fy + 2, 4, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+      } else if (currentStage === 4) {
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, '#0b132b');
+        grad.addColorStop(1, '#2b194d');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        stars.forEach((st) => {
+          const sx = st.x % W;
+          const sy = st.y % H;
+          ctx.fillStyle = `rgba(255,255,255,${0.35 + 0.65 * Math.abs(Math.sin(tick + st.phase))})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, st.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        if (Math.random() < 0.045) {
+          spawnBurst(W * (0.15 + Math.random() * 0.7), H * (0.12 + Math.random() * 0.42), 42);
+        }
+      }
+
+      // Update & draw particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.06;
+        p.alpha -= 0.016;
+        if (p.alpha <= 0) {
+          particles.splice(i, 1);
+        } else {
+          ctx.save();
+          ctx.globalAlpha = p.alpha;
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    setStage(currentStage);
+    animate();
+  </script>
+</body>
+</html>
